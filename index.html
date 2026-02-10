@@ -25,7 +25,7 @@
             .print-only { display: block !important; }
             body { background: white; overflow: visible; }
             .modal-overlay { background: white; position: absolute; inset: 0; backdrop-filter: none; }
-            .overflow-x-auto { overflow-x: visible !important; }
+            .overflow-x-auto { overflow-x: visible !important; } /* Allow table to expand in print */
         }
         .active-row { border-left: 4px solid #00A650 !important; background-color: #f0fdf4 !important; }
     </style>
@@ -68,7 +68,6 @@
             );
         };
 
-        // Papildyta informacija: Adresas ir Plotas
         const ALL_SCREENS_DATA = [
             { id: 'VLED-1', city: 'Vilnius', address: 'Jasinskio g. 12 VLN', screen: 'OPERA (J. Lelevelio g. 4)', resolution: '640x360 px', size: '18 m²', type: 'Dinaminis', ots: 85000, basePrice: 500 },
             { id: 'VLED-2', city: 'Vilnius', address: 'Švitrigailos g. 33 VLN', screen: 'PEDAGOGINIS (Konstitucijos pr.)', resolution: '640x360 px', size: '18 m²', type: 'Dinaminis', ots: 55000, basePrice: 280 },
@@ -283,7 +282,6 @@
                 setProjects(newProjects);
             }
 
-
             // --- PDF PERŽIŪRA ---
             const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -426,7 +424,7 @@
                     </header>
 
                     <main className="flex-1 overflow-y-auto p-8 custom-scrollbar no-print text-left">
-                        <div className="max-w-7xl mx-auto space-y-10 text-left">
+                        <div className="max-w-5xl mx-auto space-y-10 text-left">
                             <div className="flex justify-between items-center text-left">
                                 <h2 className="text-2xl font-black uppercase italic text-slate-900 text-left">Užsakymo projektai</h2>
                                 <button onClick={handleAddProject} className="bg-[#00A650] text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] shadow-lg flex items-center gap-2 hover:opacity-90 transition-all text-center">
@@ -454,6 +452,7 @@
                                                 </div>
                                                 <div className="flex items-center gap-4 text-left">
                                                     <div className="text-right text-left"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 uppercase text-right">Projekto suma</span><span className="text-lg font-black text-[#00A650] italic text-right">€{stats.price.toLocaleString()}</span></div>
+                                                    <button onClick={() => setScreenSelectorProjectIdx(pIdx)} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-[#00A650] hover:border-[#00A650] transition-all text-center" title="Pridėti LED ekranus"><Icons.Plus size={14}/></button>
                                                     <button onClick={() => { setEditingProject(proj); setIsProjectModalOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-blue-500 hover:border-blue-500 transition-all text-center"><Icons.Edit size={14}/></button>
                                                 </div>
                                             </div>
@@ -474,14 +473,10 @@
                                                                     <th className="pb-3 text-left">Rezoliucija</th>
                                                                     <th className="pb-3 text-left">Plotas</th>
                                                                     <th className="pb-3 text-left">Tipas</th>
-                                                                    <th className="pb-3 text-center">Min. Parodymų</th>
                                                                     <th className="pb-3 text-center">OTS</th>
-                                                                    <th className="pb-3 text-right">1 Parod.</th>
-                                                                    <th className="pb-3 text-right">CPT</th>
-                                                                    <th className="pb-3 text-right">1d. Gross</th>
-                                                                    <th className="pb-3 text-right">1sav. Net</th>
-                                                                    <th className="pb-3 text-right">Viso Gross</th>
-                                                                    <th className="pb-3 text-right pr-2">Viso Netto</th>
+                                                                    <th className="pb-3 text-center">Parod. sk.</th>
+                                                                    <th className="pb-3 text-right">Kaina (Gross)</th>
+                                                                    <th className="pb-3 text-right pr-2">Kaina (Netto)</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-slate-50 text-left whitespace-nowrap">
@@ -490,7 +485,6 @@
                                                                     const totalGross = Math.round(weeklyGross * stats.weeks);
                                                                     const totalNet = Math.round(totalGross * (1 - (proj.discount || 80) / 100));
                                                                     
-                                                                    // Nauji skaičiavimai
                                                                     const dailyGross = Math.round(weeklyGross / 7);
                                                                     const weeklyNet = Math.round(weeklyGross * (1 - (proj.discount || 80) / 100));
                                                                     const baseFreq = parseInt(proj.frequency.label) || (proj.frequency.label === 'Pikas' ? 4000 : 1200); 
