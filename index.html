@@ -25,6 +25,7 @@
             .print-only { display: block !important; }
             body { background: white; overflow: visible; }
             .modal-overlay { background: white; position: absolute; inset: 0; backdrop-filter: none; }
+            .overflow-x-auto { overflow-x: visible !important; } /* Allow table to expand in print */
         }
         .active-row { border-left: 4px solid #00A650 !important; background-color: #f0fdf4 !important; }
     </style>
@@ -68,12 +69,12 @@
         };
 
         const ALL_SCREENS_DATA = [
-            { id: 'VLED-1', city: 'Vilnius', screen: 'OPERA (J. Lelevelio g. 4)', resolution: '640x360 px', type: 'Dinaminis', ots: 85000, basePrice: 500 },
-            { id: 'VLED-2', city: 'Vilnius', screen: 'PEDAGOGINIS (Konstitucijos pr.)', resolution: '640x360 px', type: 'Dinaminis', ots: 55000, basePrice: 280 },
-            { id: 'VLED-3', city: 'Vilnius', screen: 'EUROPA (Konstitucijos pr. 7)', resolution: '864x432 px', type: 'Dinaminis', ots: 92000, basePrice: 480 },
-            { id: 'VLED-4', city: 'Vilnius', screen: 'G. VILKO ŽIEDAS', resolution: '640x360 px', type: 'Dinaminis', ots: 88000, basePrice: 470 },
-            { id: 'KLED-1', city: 'Kaunas', screen: 'DRAUGYSTĖS (Taikos pr. 79)', resolution: '512x384 px', type: 'Dinaminis', ots: 45000, basePrice: 220 },
-            { id: 'KLLED-1', city: 'Klaipėda', screen: 'TAIKOS 14', resolution: '512x384 px', type: 'Dinaminis', ots: 65000, basePrice: 380 },
+            { id: 'VLED-1', city: 'Vilnius', address: 'Jasinskio g. 12 VLN', screen: 'OPERA (J. Lelevelio g. 4)', resolution: '640x360 px', size: '18 m²', type: 'Dinaminis', ots: 85000, basePrice: 500 },
+            { id: 'VLED-2', city: 'Vilnius', address: 'Švitrigailos g. 33 VLN', screen: 'PEDAGOGINIS (Konstitucijos pr.)', resolution: '640x360 px', size: '18 m²', type: 'Dinaminis', ots: 55000, basePrice: 280 },
+            { id: 'VLED-3', city: 'Vilnius', address: 'Kalvarijų g. 61 VLN', screen: 'EUROPA (Konstitucijos pr. 7)', resolution: '864x432 px', size: '18 m²', type: 'Dinaminis', ots: 92000, basePrice: 480 },
+            { id: 'VLED-4', city: 'Vilnius', address: 'Konstitucijos pr. 7', screen: 'G. VILKO ŽIEDAS', resolution: '640x360 px', size: '18 m²', type: 'Dinaminis', ots: 88000, basePrice: 470 },
+            { id: 'KLED-1', city: 'Kaunas', address: 'Taikos pr. 79', screen: 'DRAUGYSTĖS (Taikos pr. 79)', resolution: '512x384 px', size: '18 m²', type: 'Dinaminis', ots: 45000, basePrice: 220 },
+            { id: 'KLLED-1', city: 'Klaipėda', address: 'Taikos pr. 14', screen: 'TAIKOS 14', resolution: '512x384 px', size: '18 m²', type: 'Dinaminis', ots: 65000, basePrice: 380 },
         ];
 
         const CLIENTS_INIT_DATA = [
@@ -93,6 +94,15 @@
             { id: 'f3', label: '3600', multiplier: 2.5 },
             { id: 'f4', label: 'Pikas', multiplier: 4.8 },
         ];
+
+        // Helper function to get week number
+        const getWeekNumber = (date) => {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+        };
 
         function App() {
             const [view, setView] = useState('registry'); // 'registry', 'meta', 'builder'
@@ -123,9 +133,26 @@
                 const diff = Math.ceil(Math.abs(new Date(proj.endDate) - new Date(proj.startDate)) / (1000 * 60 * 60 * 24));
                 const weeks = Math.max(1, Math.round(diff / 7 * 10) / 10);
                 const slotsCount = Object.values(proj.gridSelection || {}).filter(Boolean).length || 0;
+                
                 const baseSum = (proj.selectedScreens || []).reduce((acc, s) => acc + s.basePrice, 0);
-                const price = slotsCount > 0 ? Math.round(baseSum * proj.frequency.multiplier * (slotsCount / 14) * weeks * 0.2) : 0;
-                return { price, weeks, slotsCount, screenCount: (proj.selectedScreens || []).length };
+                
+                // Gross kaina per savaitę (bazinė kaina * multiplier * slots / 14)
+                const weeklyGrossPerScreen = (basePrice) => Math.round(basePrice * proj.frequency.multiplier * (slotsCount / 14));
+                
+                // Bendra Gross kaina
+                const totalGross = (proj.selectedScreens || []).reduce((acc, s) => acc + (weeklyGrossPerScreen(s.basePrice) * weeks), 0);
+                
+                // Netto kaina (su nuolaida)
+                const price = Math.round(totalGross * (1 - (proj.discount || 80) / 100));
+
+                return { 
+                    price, 
+                    totalGross,
+                    weeks, 
+                    slotsCount, 
+                    durationDays: diff + 1,
+                    screenCount: (proj.selectedScreens || []).length 
+                };
             };
 
             const totalOrderPrice = useMemo(() => {
@@ -146,8 +173,11 @@
                     manager: 'Vaiva Petrušina'
                 });
                 setProjects([]);
+                setScreenSelectorProjectIdx(null);
                 setEditingProject(null);
             };
+
+            const [screenSelectorProjectIdx, setScreenSelectorProjectIdx] = useState(null);
 
             const handleFinishOrder = () => {
                 if (projects.length === 0) return;
@@ -201,7 +231,8 @@
                     endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
                     frequency: WEEKLY_FREQUENCIES[0],
                     gridSelection: {},
-                    selectedScreens: []
+                    selectedScreens: [],
+                    discount: 80 // Default nuolaida
                 });
                 setIsProjectModalOpen(true);
             };
@@ -227,16 +258,27 @@
                 setEditingProject({...editingProject, frequency: freq, gridSelection: newGrid});
             };
 
-            // --- EKRANŲ PARINKIMAS (Nauja logika) ---
+            // --- EKRANŲ PARINKIMAS ---
             const [searchTerm, setSearchTerm] = useState('');
             const filteredScreens = useMemo(() => ALL_SCREENS_DATA.filter(s => s.city.toLowerCase().includes(searchTerm.toLowerCase()) || s.screen.toLowerCase().includes(searchTerm.toLowerCase())), [searchTerm]);
 
             const toggleScreenInEditingProject = (screen) => {
                 if (!editingProject) return;
-                const isSel = editingProject.selectedScreens.some(s => s.id === screen.id);
+                const isSel = editingProject.selectedScreens.some(es => es.id === screen.id);
                 const newList = isSel ? editingProject.selectedScreens.filter(s => s.id !== screen.id) : [...editingProject.selectedScreens, screen];
                 setEditingProject({ ...editingProject, selectedScreens: newList });
             };
+            
+            const toggleScreenInProject = (screen) => {
+                 if (screenSelectorProjectIdx === null) return;
+                const proj = projects[screenSelectorProjectIdx];
+                const isSel = proj.selectedScreens.some(s => s.id === screen.id);
+                const newList = isSel ? proj.selectedScreens.filter(s => s.id !== screen.id) : [...proj.selectedScreens, screen];
+                
+                const newProjects = [...projects];
+                newProjects[screenSelectorProjectIdx] = { ...proj, selectedScreens: newList };
+                setProjects(newProjects);
+            }
 
             // --- PDF PERŽIŪRA ---
             const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -391,41 +433,74 @@
                             <div className="space-y-8 text-left">
                                 {projects.map((proj, pIdx) => {
                                     const stats = calculateProjectStats(proj);
+                                    const startWeek = getWeekNumber(new Date(proj.startDate));
+                                    const endWeek = getWeekNumber(new Date(proj.endDate));
+
                                     return (
                                         <div key={proj.id} className="bg-white border-2 border-slate-100 rounded-[2.5rem] overflow-hidden shadow-sm hover:border-[#00A650] transition-all text-left">
                                             <div className="bg-slate-50 p-6 border-b border-slate-100 flex justify-between items-center text-left">
                                                 <div className="flex gap-10 text-left">
                                                     <div><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 text-left">Kampanija</span><span className="text-sm font-black text-slate-800 italic uppercase text-left">{proj.name || 'Be pavadinimo'}</span></div>
-                                                    <div><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 text-left">Laikotarpis</span><span className="text-sm font-black text-slate-600 italic uppercase text-left">{proj.startDate} — {proj.endDate}</span></div>
+                                                    <div>
+                                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 text-left">Laikotarpis</span>
+                                                        <span className="text-sm font-black text-slate-600 italic uppercase text-left">{proj.startDate} — {proj.endDate}</span>
+                                                        <span className="text-[10px] text-slate-400 ml-2 font-bold">({stats.durationDays} d., Sav. {startWeek}-{endWeek})</span>
+                                                    </div>
                                                     <div><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 text-left">Dažnis</span><span className="text-sm font-black text-slate-600 italic uppercase text-left">{proj.frequency.label}</span></div>
                                                 </div>
                                                 <div className="flex items-center gap-4 text-left">
                                                     <div className="text-right text-left"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 uppercase text-right">Projekto suma</span><span className="text-lg font-black text-[#00A650] italic text-right">€{stats.price.toLocaleString()}</span></div>
+                                                    <button onClick={() => setScreenSelectorProjectIdx(pIdx)} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-[#00A650] hover:border-[#00A650] transition-all text-center" title="Pridėti LED ekranus"><Icons.Plus size={14}/></button>
                                                     <button onClick={() => { setEditingProject(proj); setIsProjectModalOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-blue-500 hover:border-blue-500 transition-all text-center"><Icons.Edit size={14}/></button>
                                                 </div>
                                             </div>
                                             <div className="p-6 text-left">
                                                 {proj.selectedScreens.length === 0 ? (
                                                     <div className="text-center py-6 text-slate-300 italic text-xs font-black uppercase tracking-widest cursor-pointer hover:text-slate-400 text-center" onClick={() => { setEditingProject(proj); setIsProjectModalOpen(true); setIsScreenSelectOpen(true); }}>
-                                                        Nėra pasirinktų ekranų. Spustelėkite, kad pridėtumėte.
+                                                        Pridėkite LED ekranus šiam projektui...
                                                     </div>
                                                 ) : (
-                                                    <table className="w-full border-collapse text-left">
-                                                        <thead className="text-[9px] font-black uppercase text-slate-400 border-b border-slate-100 text-left">
-                                                            <tr><th className="pb-3 text-left">#</th><th className="text-left">Miestas</th><th className="text-left">Ekranas</th><th className="text-left">Tipas</th><th className="text-right">Kaina</th></tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-slate-50 text-left">
-                                                            {proj.selectedScreens.map((s, sIdx) => (
-                                                                <tr key={s.id} className="group text-left">
-                                                                    <td className="py-3 text-[10px] font-black text-slate-300 text-left">{sIdx+1}</td>
-                                                                    <td className="py-3 text-xs font-black uppercase italic text-slate-700 text-left">{s.city}</td>
-                                                                    <td className="py-3 text-xs font-black text-slate-700 text-left">{s.screen}</td>
-                                                                    <td className="py-3 text-[10px] font-bold text-slate-400 uppercase text-left">{s.type}</td>
-                                                                    <td className="py-3 text-right font-black text-slate-900 italic text-xs text-right">€{Math.round(s.basePrice * proj.frequency.multiplier * (stats.slotsCount / 14) * stats.weeks * 0.2)}</td>
+                                                    <div className="overflow-x-auto custom-scrollbar">
+                                                        <table className="w-full border-collapse text-left min-w-full">
+                                                            <thead className="text-[9px] font-black uppercase text-slate-400 border-b border-slate-100 text-left whitespace-nowrap">
+                                                                <tr>
+                                                                    <th className="pb-3 text-left pl-2">#</th>
+                                                                    <th className="pb-3 text-left">Kodas</th>
+                                                                    <th className="pb-3 text-left">Miestas</th>
+                                                                    <th className="pb-3 text-left">Adresas</th>
+                                                                    <th className="pb-3 text-left">Rezoliucija</th>
+                                                                    <th className="pb-3 text-left">Plotas</th>
+                                                                    <th className="pb-3 text-left">Tipas</th>
+                                                                    <th className="pb-3 text-center">OTS</th>
+                                                                    <th className="pb-3 text-center">Parod. sk.</th>
+                                                                    <th className="pb-3 text-right">Kaina (Gross)</th>
+                                                                    <th className="pb-3 text-right pr-2">Kaina (Netto)</th>
                                                                 </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-50 text-left whitespace-nowrap">
+                                                                {proj.selectedScreens.map((s, sIdx) => {
+                                                                    const weeklyGross = Math.round(s.basePrice * proj.frequency.multiplier * (stats.slotsCount / 14));
+                                                                    const totalGross = Math.round(weeklyGross * stats.weeks);
+                                                                    const totalNet = Math.round(totalGross * (1 - (proj.discount || 80) / 100));
+                                                                    return (
+                                                                        <tr key={s.id} className="group text-left hover:bg-slate-50 transition-colors">
+                                                                            <td className="py-3 pl-2 text-[10px] font-black text-slate-300 text-left">{sIdx+1}</td>
+                                                                            <td className="py-3 text-[10px] font-bold text-slate-500 text-left">{s.id}</td>
+                                                                            <td className="py-3 text-xs font-black uppercase italic text-slate-700 text-left">{s.city}</td>
+                                                                            <td className="py-3 text-xs font-black text-slate-700 text-left">{s.screen}</td>
+                                                                            <td className="py-3 text-[10px] font-medium text-slate-500 text-left">{s.resolution}</td>
+                                                                            <td className="py-3 text-[10px] font-medium text-slate-500 text-left">{s.size}</td>
+                                                                            <td className="py-3 text-[10px] font-bold text-slate-400 uppercase text-left">{s.type}</td>
+                                                                            <td className="py-3 text-[10px] font-bold text-slate-600 text-center">{s.ots.toLocaleString()}</td>
+                                                                            <td className="py-3 text-[10px] font-bold text-slate-600 text-center">{proj.frequency.label}</td>
+                                                                            <td className="py-3 text-right font-medium text-slate-400 text-xs text-right">€{totalGross}</td>
+                                                                            <td className="py-3 pr-2 text-right font-black text-[#00A650] italic text-xs text-right">€{totalNet}</td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -448,10 +523,10 @@
                         </div>
                     </div>
 
-                    {/* MODALINIS: PROJEKTO (KAMPANIJOS) FORMAVIMAS SU EKRANAIS */}
+                    {/* MODALINIAI LANGAI */}
                     {isProjectModalOpen && (
                         <div className="modal-overlay fixed inset-0 z-[300] flex items-center justify-center p-6 text-left">
-                            <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col h-[90vh] text-left">
+                            <div className="bg-white w-full max-w-7xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col h-[95vh] text-left">
                                 <div className="p-8 bg-slate-900 text-white flex justify-between items-center text-left text-left">
                                     <h3 className="text-2xl font-black uppercase italic italic text-left">Formuoti projektą</h3>
                                     <button onClick={() => setIsProjectModalOpen(false)} className="p-3 bg-slate-800 hover:bg-red-500 text-white rounded-2xl transition-all text-center">×</button>
@@ -466,30 +541,88 @@
                                             </div>
                                             <div className="space-y-1 text-left text-left text-left"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-left text-left">4. Pastabos</label><textarea value={editingProject.notes} onChange={e => setEditingProject({...editingProject, notes: e.target.value})} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3.5 px-6 text-sm font-bold h-24 outline-none focus:border-[#00A650] text-left" placeholder="Papildoma informacija..."></textarea></div>
                                             
-                                            {/* EKRANŲ PASIRINKIMO SEKCJA */}
+                                            {/* EKRANŲ PASIRINKIMO SEKCJA (IŠPLĖSTA) */}
                                             <div className="space-y-3 pt-4 border-t border-slate-100">
                                                 <div className="flex justify-between items-center">
-                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">5. Pasirinkti ekranai ({editingProject.selectedScreens.length})</label>
+                                                    <div className="flex items-center gap-4">
+                                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">5. Pasirinkti ekranai ({editingProject.selectedScreens.length})</label>
+                                                        <div className="flex items-center gap-2 bg-slate-100 px-3 py-1 rounded-lg">
+                                                            <span className="text-[9px] font-bold text-slate-500 uppercase">Nuolaida:</span>
+                                                            <input type="number" value={editingProject.discount} onChange={e => setEditingProject({...editingProject, discount: Number(e.target.value)})} className="w-10 bg-transparent text-[10px] font-black outline-none text-center" />
+                                                            <span className="text-[9px] font-bold text-slate-500">%</span>
+                                                        </div>
+                                                    </div>
                                                     <button onClick={() => setIsScreenSelectOpen(true)} className="bg-slate-900 text-white px-5 py-2 rounded-xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-[#00A650] transition-all"><Icons.Plus size={12} /> Pridėti ekranus</button>
                                                 </div>
                                                 
                                                 {editingProject.selectedScreens.length > 0 ? (
                                                     <div className="bg-slate-50 rounded-2xl border-2 border-slate-100 overflow-hidden">
-                                                        <table className="w-full text-left">
-                                                            <tbody className="divide-y divide-slate-200">
-                                                                {editingProject.selectedScreens.map((s, idx) => (
-                                                                    <tr key={s.id} className="text-[11px]">
-                                                                        <td className="p-3 pl-4 font-black text-slate-300">{idx+1}</td>
-                                                                        <td className="p-3 font-bold text-slate-700">{s.city}</td>
-                                                                        <td className="p-3 font-bold text-slate-900">{s.screen}</td>
-                                                                        <td className="p-3 text-right font-black text-slate-500">€{s.basePrice}</td>
-                                                                        <td className="p-3 pr-4 text-right">
-                                                                            <button onClick={() => toggleScreenInEditingProject(s)} className="text-slate-300 hover:text-red-500 transition-colors"><Icons.Trash size={14}/></button>
-                                                                        </td>
+                                                        <div className="overflow-x-auto custom-scrollbar">
+                                                            <table className="w-full text-left min-w-full">
+                                                                <thead className="bg-slate-100 text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">
+                                                                    <tr>
+                                                                        <th className="p-3 pl-4 text-left">#</th>
+                                                                        <th className="p-3 text-left">Kodas</th>
+                                                                        <th className="p-3 text-left">Miestas</th>
+                                                                        <th className="p-3 text-left">Adresas</th>
+                                                                        <th className="p-3 text-left">Rezoliucija</th>
+                                                                        <th className="p-3 text-left">Plotas</th>
+                                                                        <th className="p-3 text-left">Tipas</th>
+                                                                        <th className="p-3 text-center">Min. Parodymų</th>
+                                                                        <th className="p-3 text-center">OTS</th>
+                                                                        <th className="p-3 text-right">1 Parod.</th>
+                                                                        <th className="p-3 text-right">CPT</th>
+                                                                        <th className="p-3 text-right">1d. Gross</th>
+                                                                        <th className="p-3 text-right">1sav. Net</th>
+                                                                        <th className="p-3 text-right">Gross</th>
+                                                                        <th className="p-3 text-right">Netto</th>
+                                                                        <th className="p-3 w-10"></th>
                                                                     </tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-slate-200 whitespace-nowrap">
+                                                                    {editingProject.selectedScreens.map((s, idx) => {
+                                                                        const diff = Math.ceil(Math.abs(new Date(editingProject.endDate) - new Date(editingProject.startDate)) / (1000 * 60 * 60 * 24));
+                                                                        const weeks = Math.max(1, Math.round(diff / 7 * 10) / 10);
+                                                                        const slots = Object.values(editingProject.gridSelection || {}).filter(Boolean).length || 0;
+                                                                        
+                                                                        const weeklyGross = Math.round(s.basePrice * editingProject.frequency.multiplier * (slots / 14));
+                                                                        const gross = Math.round(weeklyGross * weeks);
+                                                                        const net = Math.round(gross * (1 - (editingProject.discount || 80) / 100));
+                                                                        
+                                                                        const dailyGross = Math.round(weeklyGross / 7);
+                                                                        const weeklyNet = Math.round(weeklyGross * (1 - (editingProject.discount || 80) / 100));
+                                                                        const baseFreq = parseInt(editingProject.frequency.label) || (editingProject.frequency.label === 'Pikas' ? 4000 : 1200); 
+                                                                        const totalShows = Math.round(baseFreq * (slots / 14) * weeks);
+                                                                        const totalOTS = Math.round(s.ots * weeks);
+                                                                        const pricePerShow = totalShows > 0 ? (net / totalShows).toFixed(3) : 0;
+                                                                        const cpt = totalOTS > 0 ? ((net / totalOTS) * 1000).toFixed(2) : 0;
+
+                                                                        return (
+                                                                            <tr key={s.id} className="text-[11px] hover:bg-white transition-colors">
+                                                                                <td className="p-3 pl-4 font-black text-slate-300">{idx+1}</td>
+                                                                                <td className="p-3 font-bold text-slate-500">{s.id}</td>
+                                                                                <td className="p-3 font-bold text-slate-700">{s.city}</td>
+                                                                                <td className="p-3 font-bold text-slate-900">{s.screen}</td>
+                                                                                <td className="p-3 text-slate-500">{s.resolution}</td>
+                                                                                <td className="p-3 text-slate-500">{s.size}</td>
+                                                                                <td className="p-3 text-slate-500 uppercase">{s.type}</td>
+                                                                                <td className="p-3 text-center text-slate-600 font-bold">{totalShows}</td>
+                                                                                <td className="p-3 text-center text-slate-600 font-bold">{totalOTS.toLocaleString()}</td>
+                                                                                <td className="p-3 text-right font-medium text-slate-400">€{pricePerShow}</td>
+                                                                                <td className="p-3 text-right font-medium text-slate-400">€{cpt}</td>
+                                                                                <td className="p-3 text-right font-medium text-slate-400">€{dailyGross}</td>
+                                                                                <td className="p-3 text-right font-medium text-slate-400">€{weeklyNet}</td>
+                                                                                <td className="p-3 text-right font-medium text-slate-400">€{gross}</td>
+                                                                                <td className="p-3 text-right font-black text-[#00A650]">€{net}</td>
+                                                                                <td className="p-3 pr-4 text-right">
+                                                                                    <button onClick={() => toggleScreenInEditingProject(s)} className="text-slate-300 hover:text-red-500 transition-colors"><Icons.Trash size={14}/></button>
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
                                                     </div>
                                                 ) : (
                                                     <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs font-bold italic bg-slate-50">Nėra pasirinktų ekranų</div>
@@ -628,7 +761,7 @@
                                             <p className="text-xs font-black text-slate-800">{orderMeta.manager}</p>
                                             <p className="text-[10px] text-slate-500">vaiva@ltadvert.lt</p>
                                         </div>
-                                        <div className="mt-auto pt-12 text-[8px] text-slate-400 font-bold uppercase tracking-[0.3em] text-center border-t border-slate-100 italic italic text-center text-center text-center text-center text-center">LT ADVERT — Lauko reklamos tinklas — www.ltadvert.lt</div>
+                                        <div className="mt-auto pt-12 text-[8px] text-slate-400 font-bold uppercase tracking-[0.3em] text-center border-t border-slate-100 italic italic text-center text-center text-center text-center">LT ADVERT — Lauko reklamos tinklas — www.ltadvert.lt</div>
                                     </div>
                                 </div>
                             </div>
