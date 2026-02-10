@@ -25,7 +25,7 @@
             .print-only { display: block !important; }
             body { background: white; overflow: visible; }
             .modal-overlay { background: white; position: absolute; inset: 0; backdrop-filter: none; }
-            .overflow-x-auto { overflow-x: visible !important; } /* Allow table to expand in print */
+            .overflow-x-auto { overflow-x: visible !important; }
         }
         .active-row { border-left: 4px solid #00A650 !important; background-color: #f0fdf4 !important; }
     </style>
@@ -68,6 +68,7 @@
             );
         };
 
+        // Papildyta informacija: Adresas ir Plotas
         const ALL_SCREENS_DATA = [
             { id: 'VLED-1', city: 'Vilnius', address: 'Jasinskio g. 12 VLN', screen: 'OPERA (J. Lelevelio g. 4)', resolution: '640x360 px', size: '18 m²', type: 'Dinaminis', ots: 85000, basePrice: 500 },
             { id: 'VLED-2', city: 'Vilnius', address: 'Švitrigailos g. 33 VLN', screen: 'PEDAGOGINIS (Konstitucijos pr.)', resolution: '640x360 px', size: '18 m²', type: 'Dinaminis', ots: 55000, basePrice: 280 },
@@ -89,10 +90,10 @@
         ];
 
         const WEEKLY_FREQUENCIES = [
-            { id: 'f1', label: '1200', multiplier: 1 },
-            { id: 'f2', label: '1800', multiplier: 1.4 },
-            { id: 'f3', label: '3600', multiplier: 2.5 },
-            { id: 'f4', label: 'Pikas', multiplier: 4.8 },
+            { id: 'f1', label: '1200', multiplier: 1, base: 1200 },
+            { id: 'f2', label: '1800', multiplier: 1.4, base: 1800 },
+            { id: 'f3', label: '3600', multiplier: 2.5, base: 3600 },
+            { id: 'f4', label: 'Pikas', multiplier: 4.8, base: 7200 },
         ];
 
         // Helper function to get week number
@@ -131,7 +132,8 @@
             // Skaičiavimai kampanijai
             const calculateProjectStats = (proj) => {
                 const diff = Math.ceil(Math.abs(new Date(proj.endDate) - new Date(proj.startDate)) / (1000 * 60 * 60 * 24));
-                const weeks = Math.max(1, Math.round(diff / 7 * 10) / 10);
+                const durationDays = diff + 1; // +1 nes imtinai
+                const weeks = Math.max(1, Math.round(durationDays / 7 * 10) / 10);
                 const slotsCount = Object.values(proj.gridSelection || {}).filter(Boolean).length || 0;
                 
                 const baseSum = (proj.selectedScreens || []).reduce((acc, s) => acc + s.basePrice, 0);
@@ -150,7 +152,7 @@
                     totalGross,
                     weeks, 
                     slotsCount, 
-                    durationDays: diff + 1,
+                    durationDays,
                     screenCount: (proj.selectedScreens || []).length 
                 };
             };
@@ -258,7 +260,7 @@
                 setEditingProject({...editingProject, frequency: freq, gridSelection: newGrid});
             };
 
-            // --- EKRANŲ PARINKIMAS ---
+            // --- EKRANŲ PARINKIMAS (Nauja logika) ---
             const [searchTerm, setSearchTerm] = useState('');
             const filteredScreens = useMemo(() => ALL_SCREENS_DATA.filter(s => s.city.toLowerCase().includes(searchTerm.toLowerCase()) || s.screen.toLowerCase().includes(searchTerm.toLowerCase())), [searchTerm]);
 
@@ -269,6 +271,7 @@
                 setEditingProject({ ...editingProject, selectedScreens: newList });
             };
             
+            // Screen toggling logic from the main list view
             const toggleScreenInProject = (screen) => {
                  if (screenSelectorProjectIdx === null) return;
                 const proj = projects[screenSelectorProjectIdx];
@@ -279,6 +282,7 @@
                 newProjects[screenSelectorProjectIdx] = { ...proj, selectedScreens: newList };
                 setProjects(newProjects);
             }
+
 
             // --- PDF PERŽIŪRA ---
             const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -422,7 +426,7 @@
                     </header>
 
                     <main className="flex-1 overflow-y-auto p-8 custom-scrollbar no-print text-left">
-                        <div className="max-w-5xl mx-auto space-y-10 text-left">
+                        <div className="max-w-7xl mx-auto space-y-10 text-left">
                             <div className="flex justify-between items-center text-left">
                                 <h2 className="text-2xl font-black uppercase italic text-slate-900 text-left">Užsakymo projektai</h2>
                                 <button onClick={handleAddProject} className="bg-[#00A650] text-white px-6 py-2.5 rounded-xl font-black uppercase text-[10px] shadow-lg flex items-center gap-2 hover:opacity-90 transition-all text-center">
@@ -450,7 +454,6 @@
                                                 </div>
                                                 <div className="flex items-center gap-4 text-left">
                                                     <div className="text-right text-left"><span className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1 uppercase text-right">Projekto suma</span><span className="text-lg font-black text-[#00A650] italic text-right">€{stats.price.toLocaleString()}</span></div>
-                                                    <button onClick={() => setScreenSelectorProjectIdx(pIdx)} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-[#00A650] hover:border-[#00A650] transition-all text-center" title="Pridėti LED ekranus"><Icons.Plus size={14}/></button>
                                                     <button onClick={() => { setEditingProject(proj); setIsProjectModalOpen(true); }} className="p-2 bg-white border border-slate-200 rounded-lg text-slate-400 hover:text-blue-500 hover:border-blue-500 transition-all text-center"><Icons.Edit size={14}/></button>
                                                 </div>
                                             </div>
@@ -471,10 +474,14 @@
                                                                     <th className="pb-3 text-left">Rezoliucija</th>
                                                                     <th className="pb-3 text-left">Plotas</th>
                                                                     <th className="pb-3 text-left">Tipas</th>
+                                                                    <th className="pb-3 text-center">Min. Parodymų</th>
                                                                     <th className="pb-3 text-center">OTS</th>
-                                                                    <th className="pb-3 text-center">Parod. sk.</th>
-                                                                    <th className="pb-3 text-right">Kaina (Gross)</th>
-                                                                    <th className="pb-3 text-right pr-2">Kaina (Netto)</th>
+                                                                    <th className="pb-3 text-right">1 Parod.</th>
+                                                                    <th className="pb-3 text-right">CPT</th>
+                                                                    <th className="pb-3 text-right">1d. Gross</th>
+                                                                    <th className="pb-3 text-right">1sav. Net</th>
+                                                                    <th className="pb-3 text-right">Viso Gross</th>
+                                                                    <th className="pb-3 text-right pr-2">Viso Netto</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-slate-50 text-left whitespace-nowrap">
@@ -482,6 +489,16 @@
                                                                     const weeklyGross = Math.round(s.basePrice * proj.frequency.multiplier * (stats.slotsCount / 14));
                                                                     const totalGross = Math.round(weeklyGross * stats.weeks);
                                                                     const totalNet = Math.round(totalGross * (1 - (proj.discount || 80) / 100));
+                                                                    
+                                                                    // Nauji skaičiavimai
+                                                                    const dailyGross = Math.round(weeklyGross / 7);
+                                                                    const weeklyNet = Math.round(weeklyGross * (1 - (proj.discount || 80) / 100));
+                                                                    const baseFreq = parseInt(proj.frequency.label) || (proj.frequency.label === 'Pikas' ? 4000 : 1200); 
+                                                                    const totalShows = Math.round(baseFreq * (stats.slotsCount / 14) * stats.weeks);
+                                                                    const totalOTS = Math.round(s.ots * stats.weeks);
+                                                                    const pricePerShow = totalShows > 0 ? (totalNet / totalShows).toFixed(3) : 0;
+                                                                    const cpt = totalOTS > 0 ? ((totalNet / totalOTS) * 1000).toFixed(2) : 0;
+
                                                                     return (
                                                                         <tr key={s.id} className="group text-left hover:bg-slate-50 transition-colors">
                                                                             <td className="py-3 pl-2 text-[10px] font-black text-slate-300 text-left">{sIdx+1}</td>
@@ -491,8 +508,16 @@
                                                                             <td className="py-3 text-[10px] font-medium text-slate-500 text-left">{s.resolution}</td>
                                                                             <td className="py-3 text-[10px] font-medium text-slate-500 text-left">{s.size}</td>
                                                                             <td className="py-3 text-[10px] font-bold text-slate-400 uppercase text-left">{s.type}</td>
-                                                                            <td className="py-3 text-[10px] font-bold text-slate-600 text-center">{s.ots.toLocaleString()}</td>
-                                                                            <td className="py-3 text-[10px] font-bold text-slate-600 text-center">{proj.frequency.label}</td>
+                                                                            
+                                                                            <td className="py-3 text-center text-slate-600 font-bold text-[10px]">{totalShows}</td>
+                                                                            <td className="py-3 text-center text-slate-600 font-bold text-[10px]">{totalOTS.toLocaleString()}</td>
+                                                                            
+                                                                            <td className="py-3 text-right text-slate-500 text-[10px]">€{pricePerShow}</td>
+                                                                            <td className="py-3 text-right text-slate-500 text-[10px]">€{cpt}</td>
+                                                                            
+                                                                            <td className="py-3 text-right text-slate-500 text-[10px]">€{dailyGross}</td>
+                                                                            <td className="py-3 text-right text-slate-500 text-[10px]">€{weeklyNet}</td>
+                                                                            
                                                                             <td className="py-3 text-right font-medium text-slate-400 text-xs text-right">€{totalGross}</td>
                                                                             <td className="py-3 pr-2 text-right font-black text-[#00A650] italic text-xs text-right">€{totalNet}</td>
                                                                         </tr>
@@ -538,6 +563,14 @@
                                             <div className="grid grid-cols-2 gap-4 text-left">
                                                 <div className="space-y-1 text-left text-left"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-left">2. Klipo trukmė</label><select value={editingProject.duration} onChange={e => setEditingProject({...editingProject, duration: e.target.value})} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3.5 px-6 text-sm font-black outline-none text-left"><option value="5s">5s</option><option value="10s">10s</option><option value="15s">15s</option><option value="20s">20s</option></select></div>
                                                 <div className="space-y-1 text-left text-left"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-left">3. Laikotarpis</label><div className="flex items-center gap-2 text-left"><input type="date" value={editingProject.startDate} onChange={e => setEditingProject({...editingProject, startDate: e.target.value})} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl py-2 px-4 text-xs font-black outline-none text-left" /><input type="date" value={editingProject.endDate} onChange={e => setEditingProject({...editingProject, endDate: e.target.value})} className="flex-1 bg-slate-50 border-2 border-slate-100 rounded-2xl py-2 px-4 text-xs font-black outline-none text-left" /></div></div>
+                                                <div className="col-span-2 text-[9px] text-slate-400 font-bold ml-1 flex gap-4">
+                                                    {editingProject.startDate && editingProject.endDate && (
+                                                        <>
+                                                            <span>Trukmė: {Math.ceil(Math.abs(new Date(editingProject.endDate) - new Date(editingProject.startDate)) / (1000 * 60 * 60 * 24)) + 1} d.</span>
+                                                            <span>Savaitės: {getWeekNumber(new Date(editingProject.startDate))} - {getWeekNumber(new Date(editingProject.endDate))}</span>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="space-y-1 text-left text-left text-left"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 text-left text-left">4. Pastabos</label><textarea value={editingProject.notes} onChange={e => setEditingProject({...editingProject, notes: e.target.value})} className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl py-3.5 px-6 text-sm font-bold h-24 outline-none focus:border-[#00A650] text-left" placeholder="Papildoma informacija..."></textarea></div>
                                             
@@ -744,14 +777,49 @@
                                                             </div>
                                                             <span className="text-xs font-black text-[#00A650] italic text-right text-right text-right">Dalis: €{stats.price.toLocaleString()}</span>
                                                         </div>
-                                                        <table className="w-full text-[10px] mb-6 text-left text-left text-left">
-                                                            <thead className="bg-slate-50 font-black uppercase text-[8px] text-slate-400 text-left text-left text-left"><tr><th className="py-2 px-2 text-left text-left text-left">Miestas ir Ekranas</th><th className="text-right py-2 px-2 text-right text-right text-right">Suma</th></tr></thead>
-                                                            <tbody className="divide-y divide-slate-100 text-left text-left text-left">
-                                                                {proj.selectedScreens.map(s => (
-                                                                    <tr key={s.id} className="text-left text-left text-left"><td className="py-2 px-2 font-bold text-slate-700 uppercase italic text-left text-left text-left">{s.city} — {s.screen}</td><td className="text-right py-2 px-2 font-black text-slate-900 text-right text-right text-right">€{Math.round(s.basePrice * proj.frequency.multiplier * (stats.slotsCount / 14) * stats.weeks * 0.2)}</td></tr>
-                                                                ))}
-                                                            </tbody>
-                                                        </table>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-[10px] mb-6 text-left text-left text-left">
+                                                                <thead className="bg-slate-50 font-black uppercase text-[8px] text-slate-400 text-left text-left text-left whitespace-nowrap">
+                                                                    <tr>
+                                                                        <th className="py-2 px-2 text-left">Miestas</th>
+                                                                        <th className="py-2 px-2 text-left">Ekranas</th>
+                                                                        <th className="py-2 px-2 text-left">Tipas</th>
+                                                                        <th className="py-2 px-2 text-center">Min. Parodymų</th>
+                                                                        <th className="py-2 px-2 text-center">OTS</th>
+                                                                        <th className="py-2 px-2 text-right">1d. Gross</th>
+                                                                        <th className="py-2 px-2 text-right">1sav. Net</th>
+                                                                        <th className="py-2 px-2 text-right">Viso Gross</th>
+                                                                        <th className="py-2 px-2 text-right">Viso Netto</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-slate-100 text-left text-left text-left whitespace-nowrap">
+                                                                    {proj.selectedScreens.map(s => {
+                                                                        const weeklyGross = Math.round(s.basePrice * proj.frequency.multiplier * (stats.slotsCount / 14));
+                                                                        const totalGross = Math.round(weeklyGross * stats.weeks);
+                                                                        const totalNet = Math.round(totalGross * (1 - (proj.discount || 80) / 100));
+                                                                        const dailyGross = Math.round(weeklyGross / 7);
+                                                                        const weeklyNet = Math.round(weeklyGross * (1 - (proj.discount || 80) / 100));
+                                                                        const baseFreq = parseInt(proj.frequency.label) || (proj.frequency.label === 'Pikas' ? 4000 : 1200); 
+                                                                        const totalShows = Math.round(baseFreq * (stats.slotsCount / 14) * stats.weeks);
+                                                                        const totalOTS = Math.round(s.ots * stats.weeks);
+
+                                                                        return (
+                                                                            <tr key={s.id} className="text-left text-left text-left">
+                                                                                <td className="py-2 px-2 font-bold text-slate-700 uppercase italic text-left">{s.city}</td>
+                                                                                <td className="py-2 px-2 font-bold text-slate-700 uppercase italic text-left">{s.screen}</td>
+                                                                                <td className="py-2 px-2 text-slate-500 uppercase">{s.type}</td>
+                                                                                <td className="py-2 px-2 text-center text-slate-600 font-bold">{totalShows}</td>
+                                                                                <td className="py-2 px-2 text-center text-slate-600 font-bold">{totalOTS.toLocaleString()}</td>
+                                                                                <td className="py-2 px-2 text-right font-medium text-slate-400">€{dailyGross}</td>
+                                                                                <td className="py-2 px-2 text-right font-medium text-slate-400">€{weeklyNet}</td>
+                                                                                <td className="py-2 px-2 text-right font-medium text-slate-400">€{totalGross}</td>
+                                                                                <td className="py-2 px-2 text-right font-black text-[#00A650]">€{totalNet}</td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
                                                     </div>
                                                 );
                                             })}
